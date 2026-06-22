@@ -33,25 +33,11 @@ function filteredMeasurements() {
   return (state.data?.measurements || []).filter(item => (!from || item.date >= from) && (!to || item.date <= to));
 }
 
-function valueStats(slots, key) {
-  const values = slots.filter(slot => slot.hasData && slot[key] != null).map(slot => Number(slot[key]));
-  if (!values.length) return { average: null, minimum: null, maximum: null };
-  return {
-    average: values.reduce((sum, value) => sum + value, 0) / values.length,
-    minimum: Math.min(...values),
-    maximum: Math.max(...values),
-  };
-}
-
 function renderSummary(slots) {
   const populated = slots.filter(slot => slot.hasData);
-  const sys = valueStats(slots, "systolic");
-  const dia = valueStats(slots, "diastolic");
-  const pulse = valueStats(slots, "pulse");
-  $("#avg-sys").textContent = formatNumber(sys.average);
-  $("#avg-dia").textContent = formatNumber(dia.average);
-  $("#avg-pulse").textContent = formatNumber(pulse.average);
-  $("#date-range").textContent = slots.length ? `${formatDate(slots[0].date)} – ${formatDate(slots[slots.length - 1].date)}` : "—";
+  $("#date-range").textContent = slots.length
+    ? `${formatDate(slots[0].date)} – ${formatDate(slots[slots.length - 1].date)}`
+    : "—";
   $("#measurement-count").textContent = `${populated.length} ${populated.length === 1 ? "punkt" : "punktów"} rano/wieczorem`;
 }
 
