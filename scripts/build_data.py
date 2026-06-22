@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import shutil
 import statistics
 import unicodedata
@@ -21,6 +22,21 @@ ALIASES = {
     "sys": ("skurczowe (mmhg)", "skurczowe", "cisnienie skurczowe (mmhg)"),
     "dia": ("rozkurczowe (mmhg)", "rozkurczowe", "cisnienie rozkurczowe (mmhg)"),
     "pulse": ("tetno (uderzenia na minute)", "tetno", "puls", "pulse"),
+}
+
+POLISH_MONTHS = {
+    "sty": 1, "styczen": 1, "stycznia": 1,
+    "lut": 2, "luty": 2, "lutego": 2,
+    "mar": 3, "marzec": 3, "marca": 3,
+    "kwi": 4, "kwiecien": 4, "kwietnia": 4,
+    "maj": 5, "maja": 5,
+    "cze": 6, "czerwiec": 6, "czerwca": 6,
+    "lip": 7, "lipiec": 7, "lipca": 7,
+    "sie": 8, "sierpien": 8, "sierpnia": 8,
+    "wrz": 9, "wrzesien": 9, "wrzesnia": 9,
+    "paz": 10, "pazdziernik": 10, "pazdziernika": 10,
+    "lis": 11, "listopad": 11, "listopada": 11,
+    "gru": 12, "grudzien": 12, "grudnia": 12,
 }
 
 
@@ -63,7 +79,19 @@ def parse_date(value):
             return datetime.strptime(text, fmt).date()
         except ValueError:
             pass
-    return None
+
+    normalized = norm(text).replace(".", " ")
+    match = re.fullmatch(r"(\d{1,2})\s+([a-z]+)\s+(\d{4})", normalized)
+    if not match:
+        return None
+    day, month_name, year = match.groups()
+    month = POLISH_MONTHS.get(month_name)
+    if month is None:
+        return None
+    try:
+        return date(int(year), month, int(day))
+    except ValueError:
+        return None
 
 
 def parse_time(value):
@@ -97,7 +125,7 @@ def read_rows():
             text, encoding = decode(path.read_bytes())
             sample = text[:8192]
             try:
-                delimiter = csv.Sniffer().sniff(sample, delimiters=";,\t,").delimiter
+                delimiter = csv.Sniffer().sniff(sample, delimiters=";,\t").delimiter
             except csv.Error:
                 delimiter = max((";", ",", "\t"), key=sample.count)
             reader = csv.DictReader(text.splitlines(), delimiter=delimiter)
@@ -124,12 +152,17 @@ def read_rows():
                     "pulse": pulse, "file": rel, "row": row_no,
                 })
                 accepted += 1
-            files.append({"name": rel, "encoding": encoding, "delimiter": "TAB" if delimiter == "\t" else delimiter,
-                          "acceptedRows": accepted, "skippedRows": skipped})
+            files.append({
+                "name": rel, "encoding": encoding,
+                "delimiter": "TAB" if delimiter == "\t" else delimiter,
+                "acceptedRows": accepted, "skippedRows": skipped,
+            })
         except Exception as exc:
             errors.append(f"{rel}: {exc}")
-    return rows, {"csvFileCount": len(paths), "files": files, "fileErrors": errors,
-                  "missingPressureRows": missing_pressure, "invalidRows": invalid}
+    return rows, {
+        "csvFileCount": len(paths), "files": files, "fileErrors": errors,
+        "missingPressureRows": missing_pressure, "invalidRows": invalid,
+    }
 
 
 def period(dt):
@@ -156,38 +189,53 @@ def deduplicate(rows):
         if len(variants) == 1 or (len(pressures) == 1 and len(pulses) <= 1):
             chosen = max(group, key=lambda r: r["pulse"] is not None)
             duplicates += max(0, len(group) - 1)
-            output.append({**common, "status": "valid", "systolic": nice(chosen["sys"]),
-                           "diastolic": nice(chosen["dia"]), "pulse": nice(next(iter(pulses)) if pulses else None),
-                           "duplicateCount": max(0, len(group) - 1)})
+            output.append({
+                **common, "status": "valid", "systolic": nice(chosen["sys"]),
+                "diastolic": nice(chosen["dia"]),
+                "pulse": nice(next(iter(pulses)) if pulses else None),
+                "duplicateCount": max(0, len(group) - 1),
+            })
         else:
             conflicts += 1
             duplicates += sum(max(0, len(items) - 1) for items in variants.values())
             details = []
             for variant, items in variants.items():
-                details.append({"systolic": nice(variant[0]), "diastolic": nice(variant[1]),
-                                "pulse": nice(variant[2]),
-                                "sources": [{"file": r["file"], "row": r["row"]} for r in items]})
-            output.append({**common, "status": "conflict", "systolic": None, "diastolic": None,
-                           "pulse": None, "duplicateCount": max(0, len(group) - len(variants)),
-                           "variants": details})
+                details.append({
+                    "systolic": nice(variant[0]), "diastolic": nice(variant[1]),
+                    "pulse": nice(variant[2]),
+                    "sources": [{"file": r["file"], "row": r["row"]} for r in items],
+                })
+            output.append({
+                **common, "status": "conflict", "systolic": None, "diastolic": None,
+                "pulse": None, "duplicateCount": max(0, len(group) - len(variants)),
+                "variants": details,
+            })
     return output, {"duplicatesRemoved": duplicates, "conflictTimestamps": conflicts}
 
 
-def average(items, key):
-    values = [float(item[key]) for item in items if item[key] is not None]
-    return nice(statistics.fmean(values)) if values else None
-
-
-def series_count(items):
+def split_series(items):
     if not items:
-        return 0
-    count, previous = 1, datetime.fromisoformat(items[0]["datetime"])
+        return []
+    series = [[items[0]]]
+    previous = datetime.fromisoformat(items[0]["datetime"])
     for item in items[1:]:
         current = datetime.fromisoformat(item["datetime"])
         if current - previous > timedelta(minutes=SERIES_MINUTES):
-            count += 1
+            series.append([])
+        series[-1].append(item)
         previous = current
-    return count
+    return series
+
+
+def average_values(items, key):
+    values = [float(item[key]) for item in items if item[key] is not None]
+    return statistics.fmean(values) if values else None
+
+
+def average_series(series, key):
+    per_series = [average_values(items, key) for items in series]
+    valid = [value for value in per_series if value is not None]
+    return nice(statistics.fmean(valid)) if valid else None
 
 
 def build_slots(measurements):
@@ -204,12 +252,18 @@ def build_slots(measurements):
         day = current.isoformat()
         for label in ("rano", "wieczorem"):
             items = sorted(valid[(day, label)], key=lambda x: x["datetime"])
-            result.append({"id": f"{day}-{label}", "date": day, "period": label,
-                           "label": f"{day} ({label})", "systolic": average(items, "systolic"),
-                           "diastolic": average(items, "diastolic"), "pulse": average(items, "pulse"),
-                           "measurementCount": len(items), "seriesCount": series_count(items),
-                           "conflictCount": len(conflict[(day, label)]), "times": [x["time"] for x in items],
-                           "hasData": bool(items)})
+            series = split_series(items)
+            result.append({
+                "id": f"{day}-{label}", "date": day, "period": label,
+                "label": f"{day} ({label})",
+                "systolic": average_series(series, "systolic"),
+                "diastolic": average_series(series, "diastolic"),
+                "pulse": average_series(series, "pulse"),
+                "measurementCount": len(items), "seriesCount": len(series),
+                "seriesSizes": [len(group) for group in series],
+                "conflictCount": len(conflict[(day, label)]),
+                "times": [x["time"] for x in items], "hasData": bool(items),
+            })
         current += timedelta(days=1)
     return result
 
@@ -218,7 +272,11 @@ def stats(slots, key):
     values = [float(slot[key]) for slot in slots if slot["hasData"] and slot[key] is not None]
     if not values:
         return {"average": None, "minimum": None, "maximum": None}
-    return {"average": nice(statistics.fmean(values)), "minimum": nice(min(values)), "maximum": nice(max(values))}
+    return {
+        "average": nice(statistics.fmean(values)),
+        "minimum": nice(min(values)),
+        "maximum": nice(max(values)),
+    }
 
 
 def main():
@@ -227,18 +285,29 @@ def main():
     slots = build_slots(measurements)
     populated = [slot for slot in slots if slot["hasData"]]
     audit.update(dedupe)
-    audit.update({"parsedRowsBeforeDeduplication": len(rows), "measurementsAfterDeduplication": len(measurements),
-                  "seriesGapMinutes": SERIES_MINUTES})
+    audit.update({
+        "parsedRowsBeforeDeduplication": len(rows),
+        "measurementsAfterDeduplication": len(measurements),
+        "seriesGapMinutes": SERIES_MINUTES,
+    })
     payload = {
-        "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"), "schemaVersion": 1,
-        "rules": {"morning": "00:00–11:59", "evening": "12:00–23:59", "seriesGapMinutes": SERIES_MINUTES},
-        "summary": {"oldestDate": slots[0]["date"] if slots else None,
-                    "newestDate": slots[-1]["date"] if slots else None,
-                    "validMeasurementCount": sum(x["status"] == "valid" for x in measurements),
-                    "groupedSlotCount": len(populated), "emptySlotCount": len(slots) - len(populated),
-                    "conflictCount": sum(x["status"] == "conflict" for x in measurements),
-                    "systolic": stats(slots, "systolic"), "diastolic": stats(slots, "diastolic"),
-                    "pulse": stats(slots, "pulse")},
+        "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "schemaVersion": 2,
+        "rules": {
+            "morning": "00:00–11:59", "evening": "12:00–23:59",
+            "seriesGapMinutes": SERIES_MINUTES,
+        },
+        "summary": {
+            "oldestDate": slots[0]["date"] if slots else None,
+            "newestDate": slots[-1]["date"] if slots else None,
+            "validMeasurementCount": sum(x["status"] == "valid" for x in measurements),
+            "groupedSlotCount": len(populated),
+            "emptySlotCount": len(slots) - len(populated),
+            "conflictCount": sum(x["status"] == "conflict" for x in measurements),
+            "systolic": stats(slots, "systolic"),
+            "diastolic": stats(slots, "diastolic"),
+            "pulse": stats(slots, "pulse"),
+        },
         "audit": audit, "slots": slots, "measurements": measurements,
     }
     if DIST.exists():
@@ -246,9 +315,16 @@ def main():
     DIST.mkdir()
     for name in ("index.html", "styles.css", "app.js"):
         shutil.copy2(ROOT / name, DIST / name)
-    (DIST / "data.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    (DIST / "data.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     (DIST / ".nojekyll").write_text("", encoding="utf-8")
-    print(f"CSV: {audit['csvFileCount']}; pomiary: {payload['summary']['validMeasurementCount']}; duplikaty: {audit['duplicatesRemoved']}; konflikty: {payload['summary']['conflictCount']}")
+    print(
+        f"CSV: {audit['csvFileCount']}; "
+        f"pomiary: {payload['summary']['validMeasurementCount']}; "
+        f"duplikaty: {audit['duplicatesRemoved']}; "
+        f"konflikty: {payload['summary']['conflictCount']}"
+    )
 
 
 if __name__ == "__main__":
