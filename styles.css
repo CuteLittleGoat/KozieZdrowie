@@ -101,29 +101,79 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
 }
 
 @media print {
-  @page { size: A4 landscape; margin: 10mm; }
+  @page { size: A4 landscape; margin: 9mm; }
   :root { color-scheme: light; }
   body { background: white !important; color: #171717 !important; }
   #screen-app { display: none !important; }
   #print-report { display: block !important; font-family: Arial, Helvetica, sans-serif; color: #171717; }
-  .print-cover { break-after: page; }
-  .print-header { border-bottom: 2px solid #333; padding-bottom: 8mm; margin-bottom: 8mm; }
-  .print-header h1 { font-size: 24pt; margin: 0 0 3mm; }
-  .print-header p { color: #555; margin: 0; }
-  .print-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; }
-  .print-metric { border: 1px solid #b8b8b8; border-radius: 3mm; padding: 4mm; }
-  .print-metric span { display: block; color: #555; font-size: 9pt; }
-  .print-metric strong { display: block; font-size: 20pt; margin-top: 2mm; }
-  .print-note { margin-top: 8mm; color: #555; font-size: 9pt; line-height: 1.45; }
-  .print-chart-page { break-after: page; }
-  .print-chart-page h2 { margin: 0 0 4mm; font-size: 16pt; }
-  .print-chart-page svg { width: 100%; height: auto; border: 1px solid #bbb; }
-  .print-table-section h2 { margin: 0 0 4mm; }
-  .print-table { width: 100%; border-collapse: collapse; font-size: 7.5pt; }
-  .print-table th, .print-table td { border: 1px solid #aaa; padding: 1.7mm; color: #171717; white-space: normal; }
-  .print-table th { background: #ececec !important; text-transform: none; letter-spacing: 0; }
-  .print-table thead { display: table-header-group; }
-  .print-table tr { break-inside: avoid; }
+
+  .print-page {
+    min-height: 188mm;
+    break-after: page;
+    page-break-after: always;
+  }
+  .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  .print-page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12mm;
+    margin-bottom: 5mm;
+    padding-bottom: 3mm;
+    border-bottom: 1.5px solid #444;
+  }
+  .print-page-header h1 {
+    margin: 0;
+    font-size: 18pt;
+    line-height: 1.1;
+  }
+  .print-segment {
+    margin: 0 0 1.5mm;
+    color: #555;
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .print-page-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1mm;
+    color: #555;
+    font-size: 8.5pt;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .print-page-meta strong { color: #222; }
+
+  .print-chart-frame {
+    overflow: hidden;
+    border: 1px solid #aaa;
+    background: white;
+  }
+  .print-chart-frame svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 164mm;
+  }
+
+  .print-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7.4pt; }
+  .print-table th, .print-table td { border: 1px solid #aaa; padding: 1.55mm 1.4mm; color: #171717; white-space: normal; vertical-align: middle; }
+  .print-table th { background: #ececec !important; text-transform: none; letter-spacing: 0; font-weight: 700; }
+  .print-table th:nth-child(1), .print-table td:nth-child(1) { width: 11%; }
+  .print-table th:nth-child(2), .print-table td:nth-child(2) { width: 8%; }
+  .print-table th:nth-child(3), .print-table td:nth-child(3) { width: 8%; }
+  .print-table th:nth-child(4), .print-table td:nth-child(4) { width: 10%; }
+  .print-table th:nth-child(5), .print-table td:nth-child(5) { width: 11%; }
+  .print-table th:nth-child(6), .print-table td:nth-child(6) { width: 8%; }
+  .print-table th:nth-child(7), .print-table td:nth-child(7) { width: 20%; }
+  .print-table th:nth-child(8), .print-table td:nth-child(8) { width: 24%; }
+  .print-table tr { break-inside: avoid; page-break-inside: avoid; }
   .print-conflict { background: #fff3df !important; }
   .print-table .flag-badge { display: inline; padding: 0; border: 0; border-radius: 0; background: transparent !important; color: #171717 !important; font-size: inherit; font-weight: 700; letter-spacing: 0; }
+  .print-empty { margin: 20mm 0; color: #666; text-align: center; }
 }
