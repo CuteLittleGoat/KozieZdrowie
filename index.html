@@ -21,21 +21,21 @@
     <section class="notice" id="status" aria-live="polite">Wczytywanie danych…</section>
 
     <section class="controls card" aria-label="Zakres danych">
-      <label for="range-select">Zakres na stronie</label>
-      <select id="range-select" disabled>
-        <option value="7">Ostatnie 7 dni</option>
-        <option value="30" selected>Ostatnie 30 dni</option>
-        <option value="90">Ostatnie 90 dni</option>
-        <option value="all">Cały okres</option>
-      </select>
+      <div class="range-control">
+        <label for="range-select">Zakres na stronie</label>
+        <select id="range-select" disabled>
+          <option value="7">Ostatnie 7 dni</option>
+          <option value="30" selected>Ostatnie 30 dni</option>
+          <option value="90">Ostatnie 90 dni</option>
+          <option value="all">Cały okres</option>
+        </select>
+        <div class="current-range">
+          <span>Zakres danych</span>
+          <strong id="date-range">—</strong>
+          <small id="measurement-count">0 pomiarów</small>
+        </div>
+      </div>
       <p>PDF zawsze obejmuje komplet danych od najstarszego do najnowszego pomiaru.</p>
-    </section>
-
-    <section class="summary-grid" aria-label="Podsumowanie">
-      <article class="metric-card systolic"><span>Średnie skurczowe</span><strong id="avg-sys">—</strong><small>mmHg</small></article>
-      <article class="metric-card diastolic"><span>Średnie rozkurczowe</span><strong id="avg-dia">—</strong><small>mmHg</small></article>
-      <article class="metric-card pulse"><span>Średnie tętno</span><strong id="avg-pulse">—</strong><small>uderzeń/min</small></article>
-      <article class="metric-card neutral"><span>Zakres danych</span><strong id="date-range">—</strong><small id="measurement-count">0 pomiarów</small></article>
     </section>
 
     <section class="card chart-card">
@@ -56,27 +56,29 @@
       <p class="chart-note">Brak pomiaru pozostawia przerwę w każdej linii. Punkt może być średnią kilku pomiarów z tej samej pory dnia.</p>
     </section>
 
-    <section class="card">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Dane źródłowe</p>
-          <h2>Lista pomiarów</h2>
-        </div>
+    <details class="card collapsible-card measurements-card">
+      <summary>
+        <span class="summary-heading">
+          <span class="eyebrow">Dane źródłowe</span>
+          <span class="summary-title">Lista pomiarów</span>
+        </span>
         <span class="muted">Najnowsze na górze</span>
+      </summary>
+      <div class="collapsible-content">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Data</th><th>Pora</th><th>Godzina</th><th>Skurczowe</th><th>Rozkurczowe</th><th>Tętno</th><th>Status</th></tr>
+            </thead>
+            <tbody id="measurements-body"></tbody>
+          </table>
+        </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Data</th><th>Pora</th><th>Godzina</th><th>Skurczowe</th><th>Rozkurczowe</th><th>Tętno</th><th>Status</th></tr>
-          </thead>
-          <tbody id="measurements-body"></tbody>
-        </table>
-      </div>
-    </section>
+    </details>
 
-    <details class="card audit-card">
+    <details class="card collapsible-card audit-card">
       <summary>Informacje o imporcie danych</summary>
-      <div id="audit"></div>
+      <div class="collapsible-content" id="audit"></div>
     </details>
   </main>
 
