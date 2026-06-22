@@ -7,6 +7,8 @@ const SERIES = [
   { key: "diastolic", label: "Rozkurczowe (mmHg)", color: COLORS.diastolic },
   { key: "pulse", label: "Tętno (uderzenia/min)", color: COLORS.pulse },
 ];
+const PRINT_CHART_SLOTS_PER_PAGE = 24;
+const PRINT_TABLE_ROWS_PER_PAGE = 22;
 
 const $ = (selector) => document.querySelector(selector);
 const formatNumber = (value) => value == null ? "—" : new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 1 }).format(value);
@@ -204,14 +206,12 @@ function render() {
   renderTable(filteredMeasurements());
 }
 
-function monthGroups(slots) {
-  const groups = new Map();
-  slots.forEach(slot => {
-    const key = slot.date.slice(0, 7);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(slot);
-  });
-  return groups;
+function chunkArray(items, size) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 }
 
 function printRow(item) {
@@ -225,30 +225,53 @@ function printRow(item) {
   </tr>`;
 }
 
+function printPageHeader(segment, title, part, total, fromDate, toDate) {
+  return `<header class="print-page-header">
+    <div>
+      <p class="print-segment">${escapeHtml(segment)}</p>
+      <h1>${escapeHtml(title)}</h1>
+    </div>
+    <div class="print-page-meta">
+      <strong>Część ${part} z ${total}</strong>
+      <span>${formatDate(fromDate)} – ${formatDate(toDate)}</span>
+    </div>
+  </header>`;
+}
+
 function preparePrintReport() {
   const data = state.data;
-  const summary = data.summary;
-  const generated = new Intl.DateTimeFormat("pl-PL", { dateStyle: "long", timeStyle: "short" }).format(new Date());
-  const charts = [...monthGroups(data.slots).entries()].map(([month, slots]) => {
-    const title = new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${month}-15T12:00:00`));
-    return `<section class="print-chart-page"><h2>${escapeHtml(title)}</h2>${makeChartSvg(slots, { light: true, print: true })}</section>`;
-  }).join("");
-  $("#print-report").innerHTML = `
-    <section class="print-cover">
-      <header class="print-header"><h1>Pomiary ciśnienia i tętna</h1><p>Okres: ${formatDate(summary.oldestDate)} – ${formatDate(summary.newestDate)} · raport utworzony ${escapeHtml(generated)}</p></header>
-      <div class="print-summary">
-        <div class="print-metric"><span>Średnie skurczowe</span><strong>${formatNumber(summary.systolic.average)} mmHg</strong></div>
-        <div class="print-metric"><span>Średnie rozkurczowe</span><strong>${formatNumber(summary.diastolic.average)} mmHg</strong></div>
-        <div class="print-metric"><span>Średnie tętno</span><strong>${formatNumber(summary.pulse.average)} /min</strong></div>
-        <div class="print-metric"><span>Prawidłowe pomiary</span><strong>${summary.validMeasurementCount}</strong></div>
-      </div>
-      <p class="print-note">Wykres przedstawia osobne punkty dla poranka (00:00–11:59) i wieczoru (12:00–23:59). Kilka pomiarów wykonanych podczas tej samej pory dnia jest przedstawianych jako jeden punkt średni. Konflikty dla identycznej daty i godziny są oznaczane jako „Niekompletne dane” i wyłączane ze średnich.</p>
-    </section>
-    ${charts}
-    <section class="print-table-section"><h2>Komplet pomiarów źródłowych</h2>
-      <table class="print-table"><thead><tr><th>Data</th><th>Pora</th><th>Godzina</th><th>Skurczowe</th><th>Rozkurczowe</th><th>Tętno</th><th>Flaga ciśnienia</th><th>Flaga tętna</th></tr></thead>
-      <tbody>${data.measurements.map(printRow).join("")}</tbody></table>
+  const chartChunks = chunkArray(data.slots || [], PRINT_CHART_SLOTS_PER_PAGE);
+  const sortedMeasurements = [...(data.measurements || [])].sort((a, b) => a.datetime.localeCompare(b.datetime));
+  const tableChunks = chunkArray(sortedMeasurements, PRINT_TABLE_ROWS_PER_PAGE);
+
+  const chartPages = (chartChunks.length ? chartChunks : [[]]).map((slots, index, all) => {
+    const fromDate = slots[0]?.date || data.summary.oldestDate;
+    const toDate = slots[slots.length - 1]?.date || data.summary.newestDate;
+    const chart = slots.length
+      ? makeChartSvg(slots, { light: true, print: true, width: 1120, height: 570 })
+      : '<p class="print-empty">Brak danych do przedstawienia na wykresie.</p>';
+    return `<section class="print-page print-chart-page">
+      ${printPageHeader("Segment 1 — Wykres", "Pomiary ciśnienia i tętna", index + 1, all.length, fromDate, toDate)}
+      <div class="print-chart-frame">${chart}</div>
     </section>`;
+  }).join("");
+
+  const tablePages = (tableChunks.length ? tableChunks : [[]]).map((measurements, index, all) => {
+    const fromDate = measurements[0]?.date || data.summary.oldestDate;
+    const toDate = measurements[measurements.length - 1]?.date || data.summary.newestDate;
+    const rows = measurements.length
+      ? measurements.map(printRow).join("")
+      : '<tr><td colspan="8" class="print-empty">Brak pomiarów do przedstawienia.</td></tr>';
+    return `<section class="print-page print-table-page">
+      ${printPageHeader("Segment 2 — Tabela", "Lista pomiarów", index + 1, all.length, fromDate, toDate)}
+      <table class="print-table">
+        <thead><tr><th>Data</th><th>Pora</th><th>Godzina</th><th>Skurczowe</th><th>Rozkurczowe</th><th>Tętno</th><th>Flaga ciśnienia</th><th>Flaga tętna</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </section>`;
+  }).join("");
+
+  $("#print-report").innerHTML = chartPages + tablePages;
 }
 
 async function loadData() {
