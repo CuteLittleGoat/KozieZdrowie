@@ -71,8 +71,13 @@ table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 th, td { padding: 12px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
 th { color: #c9d6e5; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
 tbody tr:hover { background: rgba(255,255,255,.025); }
-.status-ok { color: #b9d6f4; }
-.status-warning { color: var(--warning); font-weight: 700; }
+.flag-badge { display: inline-flex; align-items: center; min-height: 26px; padding: 4px 9px; border: 1px solid transparent; border-radius: 999px; font-size: .75rem; font-weight: 850; letter-spacing: .035em; line-height: 1.15; }
+.flag-none { color: #bddaa5; background: rgba(149, 201, 90, .11); border-color: rgba(149, 201, 90, .3); }
+.flag-elevated, .flag-attention { color: #ffe09a; background: rgba(255, 204, 102, .11); border-color: rgba(255, 204, 102, .34); }
+.flag-high { color: #ffb078; background: rgba(255, 145, 70, .12); border-color: rgba(255, 145, 70, .38); }
+.flag-critical, .flag-strong-warning { color: #ff9b9b; background: rgba(235, 98, 93, .13); border-color: rgba(235, 98, 93, .42); }
+.flag-low { color: #9fc9ff; background: rgba(90, 156, 240, .12); border-color: rgba(90, 156, 240, .38); }
+.flag-incomplete { color: #d4dbe4; background: rgba(158, 172, 189, .1); border-color: rgba(158, 172, 189, .28); }
 .status-danger { color: var(--danger); font-weight: 700; }
 .muted { color: var(--muted); font-size: .88rem; }
 .audit-card #audit { color: var(--muted); line-height: 1.65; }
@@ -114,10 +119,11 @@ tbody tr:hover { background: rgba(255,255,255,.025); }
   .print-chart-page h2 { margin: 0 0 4mm; font-size: 16pt; }
   .print-chart-page svg { width: 100%; height: auto; border: 1px solid #bbb; }
   .print-table-section h2 { margin: 0 0 4mm; }
-  .print-table { width: 100%; border-collapse: collapse; font-size: 8pt; }
-  .print-table th, .print-table td { border: 1px solid #aaa; padding: 2mm; color: #171717; white-space: normal; }
+  .print-table { width: 100%; border-collapse: collapse; font-size: 7.5pt; }
+  .print-table th, .print-table td { border: 1px solid #aaa; padding: 1.7mm; color: #171717; white-space: normal; }
   .print-table th { background: #ececec !important; text-transform: none; letter-spacing: 0; }
   .print-table thead { display: table-header-group; }
   .print-table tr { break-inside: avoid; }
   .print-conflict { background: #fff3df !important; }
+  .print-table .flag-badge { display: inline; padding: 0; border: 0; border-radius: 0; background: transparent !important; color: #171717 !important; font-size: inherit; font-weight: 700; letter-spacing: 0; }
 }
