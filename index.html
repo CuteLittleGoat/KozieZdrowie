@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <title>KozieZdrowie — pomiary ciśnienia i tętna</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell" id="screen-app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">KozieZdrowie</p>
+        <h1>Pomiary ciśnienia i tętna</h1>
+        <p class="subtitle">Automatyczne scalanie plików CSV, usuwanie duplikatów i grupowanie pomiarów na rano oraz wieczór.</p>
+      </div>
+      <button class="primary-button" id="print-button" type="button" disabled>Generuj PDF</button>
+    </header>
+
+    <section class="notice" id="status" aria-live="polite">Wczytywanie danych…</section>
+
+    <section class="controls card" aria-label="Zakres danych">
+      <label for="range-select">Zakres na stronie</label>
+      <select id="range-select" disabled>
+        <option value="7">Ostatnie 7 dni</option>
+        <option value="30" selected>Ostatnie 30 dni</option>
+        <option value="90">Ostatnie 90 dni</option>
+        <option value="all">Cały okres</option>
+      </select>
+      <p>PDF zawsze obejmuje komplet danych od najstarszego do najnowszego pomiaru.</p>
+    </section>
+
+    <section class="summary-grid" aria-label="Podsumowanie">
+      <article class="metric-card systolic"><span>Średnie skurczowe</span><strong id="avg-sys">—</strong><small>mmHg</small></article>
+      <article class="metric-card diastolic"><span>Średnie rozkurczowe</span><strong id="avg-dia">—</strong><small>mmHg</small></article>
+      <article class="metric-card pulse"><span>Średnie tętno</span><strong id="avg-pulse">—</strong><small>uderzeń/min</small></article>
+      <article class="metric-card neutral"><span>Zakres danych</span><strong id="date-range">—</strong><small id="measurement-count">0 pomiarów</small></article>
+    </section>
+
+    <section class="card chart-card">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Wykres</p>
+          <h2>Rano i wieczorem</h2>
+        </div>
+        <div class="legend" aria-label="Legenda">
+          <span><i class="legend-sys"></i>Skurczowe</span>
+          <span><i class="legend-dia"></i>Rozkurczowe</span>
+          <span><i class="legend-pulse"></i>Tętno</span>
+        </div>
+      </div>
+      <div class="chart-scroll" id="chart-scroll">
+        <div id="chart" class="chart" role="img" aria-label="Wykres ciśnienia skurczowego, rozkurczowego i tętna"></div>
+      </div>
+      <p class="chart-note">Brak pomiaru pozostawia przerwę w każdej linii. Punkt może być średnią kilku pomiarów z tej samej pory dnia.</p>
+    </section>
+
+    <section class="card">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Dane źródłowe</p>
+          <h2>Lista pomiarów</h2>
+        </div>
+        <span class="muted">Najnowsze na górze</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Data</th><th>Pora</th><th>Godzina</th><th>Skurczowe</th><th>Rozkurczowe</th><th>Tętno</th><th>Status</th></tr>
+          </thead>
+          <tbody id="measurements-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <details class="card audit-card">
+      <summary>Informacje o imporcie danych</summary>
+      <div id="audit"></div>
+    </details>
+  </main>
+
+  <section id="print-report" aria-hidden="true"></section>
+  <script src="app.js"></script>
+</body>
+</html>
