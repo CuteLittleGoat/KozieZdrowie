@@ -41,6 +41,51 @@ function renderSummary(slots) {
   $("#measurement-count").textContent = `${populated.length} ${populated.length === 1 ? "punkt" : "punktów"} rano/wieczorem`;
 }
 
+function pressureFlag(item) {
+  if (item.status === "conflict" || item.systolic == null || item.diastolic == null) {
+    return { label: "NIEKOMPLETNE DANE", className: "flag-incomplete" };
+  }
+
+  const systolic = Number(item.systolic);
+  const diastolic = Number(item.diastolic);
+
+  if (systolic >= 180 || diastolic >= 120) {
+    return { label: "BARDZO WYSOKIE", className: "flag-critical" };
+  }
+  if (systolic >= 150 || diastolic >= 95) {
+    return { label: "WYSOKIE", className: "flag-high" };
+  }
+  if (systolic >= 135 || diastolic >= 85) {
+    return { label: "PODWYŻSZONE", className: "flag-elevated" };
+  }
+  if (systolic < 90 || diastolic < 60) {
+    return { label: "NISKIE", className: "flag-low" };
+  }
+  return { label: "BRAK", className: "flag-none" };
+}
+
+function pulseFlag(item) {
+  if (item.status === "conflict") {
+    return { label: "NIEKOMPLETNE DANE", className: "flag-incomplete" };
+  }
+  if (item.pulse == null) {
+    return { label: "BRAK DANYCH", className: "flag-incomplete" };
+  }
+
+  const pulse = Number(item.pulse);
+  if (pulse < 40 || pulse > 120) {
+    return { label: "MOCNE OSTRZEŻENIE", className: "flag-strong-warning" };
+  }
+  if (pulse < 60 || pulse > 100) {
+    return { label: "WYMAGA UWAGI", className: "flag-attention" };
+  }
+  return { label: "BRAK", className: "flag-none" };
+}
+
+function flagBadge(flag) {
+  return `<span class="flag-badge ${flag.className}">${escapeHtml(flag.label)}</span>`;
+}
+
 function chartValues(slots) {
   return SERIES.flatMap(series => slots.map(slot => slot[series.key])).filter(value => value != null).map(Number);
 }
@@ -122,26 +167,20 @@ function renderChart(slots) {
   requestAnimationFrame(() => { $("#chart-scroll").scrollLeft = $("#chart-scroll").scrollWidth; });
 }
 
-function conflictText(item) {
-  return (item.variants || []).map(variant => `${formatNumber(variant.systolic)}/${formatNumber(variant.diastolic)}, tętno ${formatNumber(variant.pulse)}`).join(" | ");
-}
-
 function renderTable(measurements) {
   const body = $("#measurements-body");
   if (!measurements.length) {
-    body.innerHTML = '<tr><td colspan="7" class="empty">Brak pomiarów w wybranym zakresie.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="empty">Brak pomiarów w wybranym zakresie.</td></tr>';
     return;
   }
+
   body.innerHTML = [...measurements].reverse().map(item => {
-    const conflict = item.status === "conflict";
-    const status = conflict
-      ? `<span class="status-danger" title="${escapeHtml(conflictText(item))}">Niekompletne dane — konflikt</span>`
-      : item.duplicateCount
-        ? `<span class="status-warning">Pomiar; usunięto ${item.duplicateCount} ${item.duplicateCount === 1 ? "duplikat" : "duplikaty"}</span>`
-        : '<span class="status-ok">Pomiar</span>';
+    const pressure = pressureFlag(item);
+    const pulse = pulseFlag(item);
     return `<tr>
       <td>${formatDate(item.date)}</td><td>${escapeHtml(item.period)}</td><td>${escapeHtml(item.time)}</td>
-      <td>${formatNumber(item.systolic)}</td><td>${formatNumber(item.diastolic)}</td><td>${formatNumber(item.pulse)}</td><td>${status}</td>
+      <td>${formatNumber(item.systolic)}</td><td>${formatNumber(item.diastolic)}</td><td>${formatNumber(item.pulse)}</td>
+      <td>${flagBadge(pressure)}</td><td>${flagBadge(pulse)}</td>
     </tr>`;
   }).join("");
 }
@@ -176,9 +215,14 @@ function monthGroups(slots) {
 }
 
 function printRow(item) {
-  const conflict = item.status === "conflict";
-  const status = conflict ? `Niekompletne dane — konflikt: ${conflictText(item)}` : (item.duplicateCount ? `Pomiar; usunięto duplikaty: ${item.duplicateCount}` : "Pomiar");
-  return `<tr class="${conflict ? "print-conflict" : ""}"><td>${formatDate(item.date)}</td><td>${escapeHtml(item.period)}</td><td>${escapeHtml(item.time)}</td><td>${formatNumber(item.systolic)}</td><td>${formatNumber(item.diastolic)}</td><td>${formatNumber(item.pulse)}</td><td>${escapeHtml(status)}</td></tr>`;
+  const pressure = pressureFlag(item);
+  const pulse = pulseFlag(item);
+  const conflictClass = item.status === "conflict" ? "print-conflict" : "";
+  return `<tr class="${conflictClass}">
+    <td>${formatDate(item.date)}</td><td>${escapeHtml(item.period)}</td><td>${escapeHtml(item.time)}</td>
+    <td>${formatNumber(item.systolic)}</td><td>${formatNumber(item.diastolic)}</td><td>${formatNumber(item.pulse)}</td>
+    <td>${flagBadge(pressure)}</td><td>${flagBadge(pulse)}</td>
+  </tr>`;
 }
 
 function preparePrintReport() {
@@ -198,11 +242,11 @@ function preparePrintReport() {
         <div class="print-metric"><span>Średnie tętno</span><strong>${formatNumber(summary.pulse.average)} /min</strong></div>
         <div class="print-metric"><span>Prawidłowe pomiary</span><strong>${summary.validMeasurementCount}</strong></div>
       </div>
-      <p class="print-note">Wykres przedstawia osobne punkty dla poranka (00:00–11:59) i wieczoru (12:00–23:59). Kilka pomiarów wykonanych podczas tej samej pory dnia jest przedstawianych jako jeden punkt średni. Konflikty dla identycznej daty i godziny oznaczono jako „Niekompletne dane” i wyłączono ze średnich.</p>
+      <p class="print-note">Wykres przedstawia osobne punkty dla poranka (00:00–11:59) i wieczoru (12:00–23:59). Kilka pomiarów wykonanych podczas tej samej pory dnia jest przedstawianych jako jeden punkt średni. Konflikty dla identycznej daty i godziny są oznaczane jako „Niekompletne dane” i wyłączane ze średnich.</p>
     </section>
     ${charts}
     <section class="print-table-section"><h2>Komplet pomiarów źródłowych</h2>
-      <table class="print-table"><thead><tr><th>Data</th><th>Pora</th><th>Godzina</th><th>Skurczowe</th><th>Rozkurczowe</th><th>Tętno</th><th>Status</th></tr></thead>
+      <table class="print-table"><thead><tr><th>Data</th><th>Pora</th><th>Godzina</th><th>Skurczowe</th><th>Rozkurczowe</th><th>Tętno</th><th>Flaga ciśnienia</th><th>Flaga tętna</th></tr></thead>
       <tbody>${data.measurements.map(printRow).join("")}</tbody></table>
     </section>`;
 }
