@@ -25,9 +25,9 @@
         <label for="range-select">Zakres na stronie</label>
         <select id="range-select" disabled>
           <option value="7">Ostatnie 7 dni</option>
-          <option value="30" selected>Ostatnie 30 dni</option>
+          <option value="30">Ostatnie 30 dni</option>
           <option value="90">Ostatnie 90 dni</option>
-          <option value="all">Cały okres</option>
+          <option value="all" selected>Cały okres</option>
         </select>
         <div class="current-range">
           <span>Zakres danych</span>
@@ -79,5 +79,10 @@
 
   <section id="print-report" aria-hidden="true"></section>
   <script src="app.js"></script>
+  <script>
+    const rangeSelect = document.querySelector("#range-select");
+    rangeSelect.value = "all";
+    rangeSelect.dispatchEvent(new Event("change"));
+  </script>
 </body>
 </html>
