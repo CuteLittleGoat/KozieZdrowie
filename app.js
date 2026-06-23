@@ -3,16 +3,17 @@
 const state = { data: null, range: "30" };
 const COLORS = { systolic: "#5a9cf0", diastolic: "#eb625d", pulse: "#95c95a" };
 const SERIES = [
-  { key: "systolic", label: "Skurczowe (mmHg)", color: COLORS.systolic },
-  { key: "diastolic", label: "Rozkurczowe (mmHg)", color: COLORS.diastolic },
-  { key: "pulse", label: "Tętno (uderzenia/min)", color: COLORS.pulse },
+  { key: "systolic", short: "S", label: "Skurczowe (mmHg)", legend: "Skurczowe [mmHg]", color: COLORS.systolic },
+  { key: "diastolic", short: "R", label: "Rozkurczowe (mmHg)", legend: "Rozkurczowe [mmHg]", color: COLORS.diastolic },
+  { key: "pulse", short: "T", label: "Tętno (uderzenia/min)", legend: "Tętno [ud./min]", color: COLORS.pulse },
 ];
-const PRINT_CHART_SLOTS_PER_PAGE = 24;
+const PRINT_CHART_DAYS_PER_PAGE = 12;
 const PRINT_TABLE_ROWS_PER_PAGE = 22;
 
 const $ = (selector) => document.querySelector(selector);
 const formatNumber = (value) => value == null ? "—" : new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 1 }).format(value);
 const formatDate = (value) => value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "—";
+const formatPeriod = (value) => value === "rano" ? "Rano" : value === "wieczorem" ? "Wieczór" : value;
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
 
 function rangeBounds() {
@@ -92,27 +93,70 @@ function chartValues(slots) {
   return SERIES.flatMap(series => slots.map(slot => slot[series.key])).filter(value => value != null).map(Number);
 }
 
+function groupSlotsByDate(slots) {
+  return slots.reduce((groups, slot) => {
+    let group = groups[groups.length - 1];
+    if (!group || group.date !== slot.date) {
+      group = { date: slot.date, slots: [] };
+      groups.push(group);
+    }
+    group.slots.push(slot);
+    return groups;
+  }, []);
+}
+
 function makeChartSvg(slots, options = {}) {
   const light = Boolean(options.light);
   const print = Boolean(options.print);
-  const slotWidth = print ? 19 : 66;
-  const width = options.width || Math.max(print ? 1080 : 760, slots.length * slotWidth + 110);
-  const height = options.height || (print ? 560 : 450);
-  const margin = { top: 52, right: 30, bottom: print ? 112 : 100, left: 62 };
+  const dayGroups = groupSlotsByDate(slots);
+  const preferredDayWidth = print ? 84 : 150;
+  const width = options.width || Math.max(print ? 1080 : 760, dayGroups.length * preferredDayWidth + 100);
+  const height = options.height || (print ? 610 : 530);
+  const margin = { top: 58, right: 24, bottom: print ? 150 : 150, left: 62 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
+  const plotBottom = margin.top + plotHeight;
+  const dayWidth = dayGroups.length ? plotWidth / dayGroups.length : plotWidth;
   const values = chartValues(slots);
   let min = values.length ? Math.floor((Math.min(...values) - 10) / 10) * 10 : 40;
   let max = values.length ? Math.ceil((Math.max(...values) + 10) / 10) * 10 : 160;
   if (max - min < 60) { min -= 10; max += 10; }
   min = Math.max(0, min);
-  const x = index => margin.left + (slots.length <= 1 ? plotWidth / 2 : index * plotWidth / (slots.length - 1));
+
+  const slotCoordinates = new Map();
+  dayGroups.forEach((group, dayIndex) => {
+    group.slots.forEach((slot, slotIndex) => {
+      const relativePosition = (slotIndex + 1) / (group.slots.length + 1);
+      slotCoordinates.set(slot.id, margin.left + dayIndex * dayWidth + relativePosition * dayWidth);
+    });
+  });
+
+  const x = index => slotCoordinates.get(slots[index].id);
   const y = value => margin.top + (max - Number(value)) * plotHeight / (max - min);
   const bg = light ? "#ffffff" : "#0e151f";
   const text = light ? "#333333" : "#aebaca";
+  const strongText = light ? "#171717" : "#eef4fb";
+  const mutedText = light ? "#666666" : "#8998aa";
   const grid = light ? "#d7d7d7" : "#2a3748";
   const axis = light ? "#777777" : "#607086";
-  const parts = [`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img">`, `<rect width="100%" height="100%" fill="${bg}"/>`];
+  const dayBand = light ? "#f5f7f9" : "#111b27";
+  const separator = light ? "#c9cdd2" : "#344357";
+  const fontSize = print ? 8 : 10;
+  const parts = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="chart-title">`,
+    `<title id="chart-title">Wykres ciśnienia skurczowego, rozkurczowego i tętna z wartościami dla pomiarów porannych i wieczornych</title>`,
+    `<rect width="100%" height="100%" fill="${bg}"/>`,
+  ];
+
+  dayGroups.forEach((group, dayIndex) => {
+    const startX = margin.left + dayIndex * dayWidth;
+    if (dayIndex % 2 === 1) {
+      parts.push(`<rect x="${startX.toFixed(2)}" y="${margin.top}" width="${dayWidth.toFixed(2)}" height="${(height - margin.top - 18).toFixed(2)}" fill="${dayBand}"/>`);
+    }
+    if (dayIndex > 0) {
+      parts.push(`<line x1="${startX.toFixed(2)}" y1="${margin.top}" x2="${startX.toFixed(2)}" y2="${height - 18}" stroke="${separator}" stroke-width="1"/>`);
+    }
+  });
 
   for (let i = 0; i <= 6; i++) {
     const value = min + (max - min) * i / 6;
@@ -120,16 +164,23 @@ function makeChartSvg(slots, options = {}) {
     parts.push(`<line x1="${margin.left}" y1="${yy}" x2="${width - margin.right}" y2="${yy}" stroke="${grid}" stroke-width="1"/>`);
     parts.push(`<text x="${margin.left - 10}" y="${yy + 4}" text-anchor="end" fill="${text}" font-size="11">${Math.round(value)}</text>`);
   }
-  parts.push(`<line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${width - margin.right}" y2="${margin.top + plotHeight}" stroke="${axis}"/>`);
+  parts.push(`<line x1="${margin.left}" y1="${plotBottom}" x2="${width - margin.right}" y2="${plotBottom}" stroke="${axis}"/>`);
 
-  const labelStep = print ? Math.max(1, Math.ceil(slots.length / 32)) : 1;
-  slots.forEach((slot, index) => {
-    if (index % labelStep !== 0 && index !== slots.length - 1) return;
-    const xx = x(index);
-    const labelY = margin.top + plotHeight + 18;
-    const dateLabel = formatDate(slot.date);
-    parts.push(`<line x1="${xx}" y1="${margin.top + plotHeight}" x2="${xx}" y2="${margin.top + plotHeight + 5}" stroke="${axis}"/>`);
-    parts.push(`<text transform="translate(${xx - 2},${labelY}) rotate(-55)" text-anchor="end" fill="${text}" font-size="${print ? 8 : 10}"><tspan>${escapeHtml(dateLabel)}</tspan><tspan x="0" dy="11">${escapeHtml(slot.period)}</tspan></text>`);
+  dayGroups.forEach((group, dayIndex) => {
+    const centerX = margin.left + dayIndex * dayWidth + dayWidth / 2;
+    parts.push(`<text x="${centerX.toFixed(2)}" y="${plotBottom + 22}" text-anchor="middle" fill="${strongText}" font-size="${print ? 8.5 : 10.5}" font-weight="700">${escapeHtml(formatDate(group.date))}</text>`);
+
+    group.slots.forEach(slot => {
+      const slotX = slotCoordinates.get(slot.id);
+      parts.push(`<line x1="${slotX.toFixed(2)}" y1="${plotBottom}" x2="${slotX.toFixed(2)}" y2="${plotBottom + 5}" stroke="${axis}"/>`);
+      parts.push(`<text x="${slotX.toFixed(2)}" y="${plotBottom + 41}" text-anchor="middle" fill="${mutedText}" font-size="${print ? 7.5 : 9}" font-weight="700">${escapeHtml(formatPeriod(slot.period))}</text>`);
+
+      SERIES.forEach((series, rowIndex) => {
+        const rowY = plotBottom + 62 + rowIndex * (print ? 16 : 18);
+        parts.push(`<text x="${(slotX - 2).toFixed(2)}" y="${rowY}" text-anchor="end" fill="${series.color}" font-size="${fontSize}" font-weight="800">${series.short}:</text>`);
+        parts.push(`<text x="${(slotX + 2).toFixed(2)}" y="${rowY}" text-anchor="start" fill="${strongText}" font-size="${fontSize}">${escapeHtml(formatNumber(slot[series.key]))}</text>`);
+      });
+    });
   });
 
   SERIES.forEach(series => {
@@ -144,17 +195,17 @@ function makeChartSvg(slots, options = {}) {
     slots.forEach((slot, index) => {
       const value = slot[series.key];
       if (value == null) return;
-      const details = `${slot.label}\n${series.label}: ${formatNumber(value)}\nPomiary źródłowe: ${slot.measurementCount}\nSerie: ${slot.seriesCount}${slot.conflictCount ? `\nKonflikty pominięte: ${slot.conflictCount}` : ""}`;
+      const details = `${formatDate(slot.date)} — ${formatPeriod(slot.period)}\n${series.label}: ${formatNumber(value)}\nPomiary źródłowe: ${slot.measurementCount}\nSerie: ${slot.seriesCount}${slot.conflictCount ? `\nKonflikty pominięte: ${slot.conflictCount}` : ""}`;
       parts.push(`<circle cx="${x(index)}" cy="${y(value)}" r="${print ? 2.4 : 4}" fill="${series.color}" stroke="${bg}" stroke-width="1.5"><title>${escapeHtml(details)}</title></circle>`);
     });
   });
 
-  let legendX = margin.left;
-  SERIES.forEach(series => {
-    parts.push(`<line x1="${legendX}" y1="24" x2="${legendX + 26}" y2="24" stroke="${series.color}" stroke-width="3"/>`);
-    parts.push(`<text x="${legendX + 33}" y="28" fill="${text}" font-size="11">${escapeHtml(series.label)}</text>`);
-    legendX += print ? 285 : 250;
+  SERIES.forEach((series, index) => {
+    const legendX = margin.left + (index + 0.5) * plotWidth / SERIES.length;
+    parts.push(`<line x1="${legendX - (print ? 70 : 84)}" y1="25" x2="${legendX - (print ? 48 : 58)}" y2="25" stroke="${series.color}" stroke-width="3"/>`);
+    parts.push(`<text x="${legendX - (print ? 42 : 51)}" y="29" fill="${text}" font-size="${print ? 9 : 11}"><tspan fill="${series.color}" font-weight="800">${series.short}</tspan><tspan> — ${escapeHtml(series.legend)}</tspan></text>`);
   });
+
   parts.push("</svg>");
   return parts.join("");
 }
@@ -214,6 +265,10 @@ function chunkArray(items, size) {
   return chunks;
 }
 
+function chunkSlotsByDay(slots, daysPerChunk) {
+  return chunkArray(groupSlotsByDate(slots), daysPerChunk).map(days => days.flatMap(day => day.slots));
+}
+
 function printRow(item) {
   const pressure = pressureFlag(item);
   const pulse = pulseFlag(item);
@@ -240,7 +295,7 @@ function printPageHeader(segment, title, part, total, fromDate, toDate) {
 
 function preparePrintReport() {
   const data = state.data;
-  const chartChunks = chunkArray(data.slots || [], PRINT_CHART_SLOTS_PER_PAGE);
+  const chartChunks = chunkSlotsByDay(data.slots || [], PRINT_CHART_DAYS_PER_PAGE);
   const sortedMeasurements = [...(data.measurements || [])].sort((a, b) => a.datetime.localeCompare(b.datetime));
   const tableChunks = chunkArray(sortedMeasurements, PRINT_TABLE_ROWS_PER_PAGE);
 
@@ -248,7 +303,7 @@ function preparePrintReport() {
     const fromDate = slots[0]?.date || data.summary.oldestDate;
     const toDate = slots[slots.length - 1]?.date || data.summary.newestDate;
     const chart = slots.length
-      ? makeChartSvg(slots, { light: true, print: true, width: 1120, height: 570 })
+      ? makeChartSvg(slots, { light: true, print: true, width: 1120, height: 610 })
       : '<p class="print-empty">Brak danych do przedstawienia na wykresie.</p>';
     return `<section class="print-page print-chart-page">
       ${printPageHeader("Segment 1 — Wykres", "Pomiary ciśnienia i tętna", index + 1, all.length, fromDate, toDate)}
