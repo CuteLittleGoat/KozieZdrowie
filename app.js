@@ -276,7 +276,7 @@ function printRow(item) {
   return `<tr class="${conflictClass}">
     <td>${formatDate(item.date)}</td><td>${escapeHtml(item.period)}</td><td>${escapeHtml(item.time)}</td>
     <td>${formatNumber(item.systolic)}</td><td>${formatNumber(item.diastolic)}</td><td>${formatNumber(item.pulse)}</td>
-    <td>${flagBadge(pressure)}</td><td>${flagBadge(pulse)}</td>
+    <td>${pressure.className === "flag-none" ? "" : flagBadge(pressure)}</td><td>${pulse.className === "flag-none" ? "" : flagBadge(pulse)}</td>
   </tr>`;
 }
 
